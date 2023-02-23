@@ -5,11 +5,17 @@ use wasm_bindgen::JsValue;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct User {
     pub name: String,
+    pub turn: bool,
+    pub countdown: f64,
 }
 
 impl User {
     pub fn new(name: String) -> User {
-        User { name }
+        User {
+            name,
+            turn: true,
+            countdown: 0.,
+        }
     }
 }
 
@@ -28,7 +34,7 @@ impl UserList {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Cell {
     Empty,
     Neutral,
@@ -51,13 +57,14 @@ pub const RED_COLOR: &str = "#FF0000";
 
 pub const WIDTH_UNIVERSE: u32 = 32;
 pub const HEIGHT_UNIVERSE: u32 = 32;
-pub const N_NEUTRAL_BLOCKS: u32 = 50;
+pub const N_NEUTRAL_BLOCKS: u32 = 100;
 
 pub const WIDTH_CANVAS: u32 = (CELL_SIZE + 1) * WIDTH_UNIVERSE as u32 + 1;
 pub const HEIGHT_CANVAS: u32 = (CELL_SIZE + 1) * HEIGHT_UNIVERSE as u32 + 1;
 
-type Coords = (usize, usize);
+pub type Coords = (usize, usize);
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Universe {
     cells: Vec<Cell>,
     active_cells: Vec<(Cell, Coords)>,
@@ -68,6 +75,7 @@ pub struct Universe {
     n_red: u32,
     n_blue: u32,
     finished: bool,
+    timer: f64,
 }
 
 enum CellWrapper<'a> {
@@ -87,14 +95,15 @@ impl Universe {
             n_red: 0,
             n_blue: 0,
             finished: false,
+            timer: 3.,
         }
     }
 
     pub fn new_rand() -> Universe {
         let mut uni = Self::new_empty();
-        for _ in 0..N_NEUTRAL_BLOCKS {
+        for i in 0..N_NEUTRAL_BLOCKS {
             // let idx = rand::random::<usize>() % uni.cells.len();
-            let idx = 1;
+            let idx = ((((i as usize + 153) * 4) + 44) * 22) % uni.cells.len();
             if uni.cells[idx] == Cell::Empty {
                 uni.cells[idx] = Cell::Neutral;
                 uni.n_empty -= 1;
@@ -131,7 +140,7 @@ impl Universe {
         self.finished
     }
 
-    fn get_index(&self, coords: Coords) -> Result<usize, ()> {
+    pub fn get_index(&self, coords: Coords) -> Result<usize, ()> {
         let out = coords.0 + coords.1 * self.width;
         if out > self.cells.len() {
             Err(())
@@ -187,6 +196,17 @@ impl Universe {
             }
             _ => Err(()),
         }
+    }
+    pub fn get_cells(&self) -> Vec<Cell> {
+        self.cells.clone()
+    }
+
+    pub fn get_timer(&self) -> f64 {
+        self.timer
+    }
+
+    pub fn set_timer(&mut self, t: f64) {
+        self.timer = t;
     }
 }
 

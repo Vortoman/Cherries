@@ -28,15 +28,10 @@ impl AppState {
     }
 }
 
-struct ImageButtonState {
-    value: bool,
-}
-
 enum UserMsg {
     UpdateInput(String),
     ButtonPressed(String),
 }
-
 #[derive(Clone, PartialEq, Properties)]
 struct UserProps {
     name: AttrValue,
@@ -190,11 +185,12 @@ impl Component for ActiveUsers {
 
 pub struct InGame {
     canvas: NodeRef,
+    universe: Universe,
 }
 
 pub enum InGameMsg {
     Init,
-    Render,
+    Render(Universe),
     CanvasClick(MouseEvent),
 }
 
@@ -205,7 +201,10 @@ impl Component for InGame {
     fn create(ctx: &Context<Self>) -> Self {
         let canvas = NodeRef::default();
         ctx.link().send_message(InGameMsg::Init);
-        InGame { canvas }
+        InGame {
+            canvas,
+            universe: Universe::new_empty(),
+        }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -214,50 +213,55 @@ impl Component for InGame {
                 self.init(ctx);
                 true
             }
-            InGameMsg::Render => {
-                self.render();
-                false
+            InGameMsg::Render(uni) => {
+                self.universe = uni;
+                self.render_universe();
+                true
             }
             InGameMsg::CanvasClick(eve) => {
-                let canvas: HtmlCanvasElement = self.canvas.cast().unwrap();
-                let cctx: CanvasRenderingContext2d = canvas
-                    .get_context("2d")
-                    .unwrap()
-                    .unwrap()
-                    .dyn_into()
-                    .unwrap();
-
-                let x = eve.offset_x();
-                let y = eve.offset_y();
+                let x = eve.offset_x() as u32;
+                let y = eve.offset_y() as u32;
                 log!("clicko geilo {x}, {y}");
 
-                let url = "/api/game/click";
+                let x_uni = x * WIDTH_UNIVERSE / WIDTH_CANVAS;
+                let y_uni = y * HEIGHT_UNIVERSE / HEIGHT_CANVAS;
+                log!("zelle:  {x_uni}, {y_uni}");
+                let url = "/api/universe/cellpick";
                 wasm_bindgen_futures::spawn_local(async move {
                     Request::post(url)
                         .header("Content-Type", "application/json")
-                        .body(serde_json::to_string(&Point::new(x, y)).unwrap())
+                        .body(serde_json::to_string(&(x_uni, y_uni)).unwrap())
                         .send()
                         .await
                         .unwrap();
                 });
-                cctx.set_fill_style(&JsValue::from("rgb(0,79,92)"));
-                cctx.begin_path();
-                cctx.arc(x as f64, y as f64, 20.0, 0.0, 2.0 * std::f64::consts::PI)
-                    .unwrap();
-                cctx.fill();
-
                 true
             }
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        let link = ctx.link().clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let url = "/api/universe/universe";
+            let response = Request::get(url)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            console::log_1(&JsValue::from(format!("{:?}", response)));
+            link.send_message(InGameMsg::Render(response));
+        });
+        let timer = self.universe.get_timer();
         html! {<>
             <canvas id="drawing"
                 width = {format!("{WIDTH_CANVAS}")}
             height = {format!("{HEIGHT_CANVAS}")}
                 ref={self.canvas.clone()}
             onclick={ctx.link().callback(|event: web_sys::MouseEvent| InGameMsg::CanvasClick(event))}/>
+                <p>{"Timer: "}{format!("{:.2}", timer)}</p>
                 </>
         }
     }
@@ -278,9 +282,101 @@ impl InGame {
         cctx.fill_rect(0.0, 0.0, WIDTH_CANVAS.into(), HEIGHT_CANVAS.into());
         // let _ = cctx.fill_text("hello", 200.0, 200.0);
         self.draw_grid();
-        ctx.link().send_message(InGameMsg::Render);
     }
-    fn render(&self) {}
+    fn render_universe(&self) {
+        let canvas: HtmlCanvasElement = self.canvas.cast().unwrap();
+        let cctx: CanvasRenderingContext2d = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into()
+            .unwrap();
+
+        let cells = self.universe.get_cells();
+        log!("hier bin ich !");
+        cctx.begin_path();
+
+        cctx.set_fill_style(&JsValue::from(EMPTY_COLOR));
+        for row in 0..WIDTH_UNIVERSE {
+            for col in 0..HEIGHT_UNIVERSE {
+                if cells[self
+                    .universe
+                    .get_index((row as usize, col as usize))
+                    .unwrap()]
+                    != Cell::Empty
+                {
+                    continue;
+                }
+                cctx.fill_rect(
+                    (col * (CELL_SIZE + 1) + 1) as f64,
+                    (row * (CELL_SIZE + 1) + 1) as f64,
+                    CELL_SIZE as f64,
+                    CELL_SIZE as f64,
+                );
+            }
+        }
+
+        cctx.set_fill_style(&JsValue::from(RED_COLOR));
+        for row in 0..WIDTH_UNIVERSE {
+            for col in 0..HEIGHT_UNIVERSE {
+                if cells[self
+                    .universe
+                    .get_index((row as usize, col as usize))
+                    .unwrap()]
+                    != Cell::Red
+                {
+                    continue;
+                }
+                cctx.fill_rect(
+                    (col * (CELL_SIZE + 1) + 1) as f64,
+                    (row * (CELL_SIZE + 1) + 1) as f64,
+                    CELL_SIZE as f64,
+                    CELL_SIZE as f64,
+                );
+            }
+        }
+
+        cctx.set_fill_style(&JsValue::from(BLUE_COLOR));
+        for row in 0..WIDTH_UNIVERSE {
+            for col in 0..HEIGHT_UNIVERSE {
+                if cells[self
+                    .universe
+                    .get_index((row as usize, col as usize))
+                    .unwrap()]
+                    != Cell::Blue
+                {
+                    continue;
+                }
+                cctx.fill_rect(
+                    (col * (CELL_SIZE + 1) + 1) as f64,
+                    (row * (CELL_SIZE + 1) + 1) as f64,
+                    CELL_SIZE as f64,
+                    CELL_SIZE as f64,
+                );
+            }
+        }
+
+        cctx.set_fill_style(&JsValue::from(WALL_COLOR));
+        for row in 0..WIDTH_UNIVERSE {
+            for col in 0..HEIGHT_UNIVERSE {
+                if cells[self
+                    .universe
+                    .get_index((row as usize, col as usize))
+                    .unwrap()]
+                    != Cell::Neutral
+                {
+                    continue;
+                }
+                cctx.fill_rect(
+                    (col * (CELL_SIZE + 1) + 1) as f64,
+                    (row * (CELL_SIZE + 1) + 1) as f64,
+                    CELL_SIZE as f64,
+                    CELL_SIZE as f64,
+                );
+            }
+        }
+        cctx.stroke();
+    }
 
     fn draw_grid(&self) {
         let canvas: HtmlCanvasElement = self.canvas.cast().unwrap();
