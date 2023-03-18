@@ -614,15 +614,9 @@ function getImports() {
     imports.wbg.__wbg_beginPath_0948db80d0d23ce3 = function(arg0) {
         getObject(arg0).beginPath();
     };
-    imports.wbg.__wbg_fill_ae4121c3dafa1f99 = function(arg0) {
-        getObject(arg0).fill();
-    };
     imports.wbg.__wbg_stroke_6e1b85c72caa53ea = function(arg0) {
         getObject(arg0).stroke();
     };
-    imports.wbg.__wbg_arc_37174ad97fea93a9 = function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5) {
-        getObject(arg0).arc(arg1, arg2, arg3, arg4, arg5);
-    }, arguments) };
     imports.wbg.__wbg_lineTo_b902f35217ff96ab = function(arg0, arg1, arg2) {
         getObject(arg0).lineTo(arg1, arg2);
     };
@@ -915,16 +909,16 @@ function getImports() {
         const ret = wasm.memory;
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper7605 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 573, __wbg_adapter_38);
+    imports.wbg.__wbindgen_closure_wrapper8043 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 638, __wbg_adapter_38);
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper8208 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 592, __wbg_adapter_41);
+    imports.wbg.__wbindgen_closure_wrapper8646 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 656, __wbg_adapter_41);
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper11378 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 674, __wbg_adapter_44);
+    imports.wbg.__wbindgen_closure_wrapper11814 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 738, __wbg_adapter_44);
         return addHeapObject(ret);
     };
 
@@ -963,7 +957,7 @@ function initSync(module) {
 
 async function init(input) {
     if (typeof input === 'undefined') {
-        input = new URL('trunk-template-37b14e55dc10978e_bg.wasm', import.meta.url);
+        input = new URL('trunk-template-75ce999e14974ef1_bg.wasm', import.meta.url);
     }
     const imports = getImports();
 

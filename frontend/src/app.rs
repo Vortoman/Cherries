@@ -1,12 +1,9 @@
 use common::*;
 use reqwasm::http::Request;
-use serde::{Deserialize, Serialize};
 use serde_json;
-use wasm_bindgen::{JsCast, JsValue, __rt::IntoJsResult};
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures;
-use web_sys::{
-    console, CanvasRenderingContext2d, EventTarget, HtmlCanvasElement, HtmlInputElement,
-};
+use web_sys::{console, CanvasRenderingContext2d, HtmlCanvasElement, HtmlInputElement};
 use yew::prelude::*;
 use yew_router::prelude::*;
 
@@ -18,12 +15,14 @@ macro_rules! log {
 
 struct AppState {
     user_name: String,
+    winner: String,
 }
 
 impl AppState {
     fn new() -> Self {
         AppState {
             user_name: "".into(),
+            winner: "".into(),
         }
     }
 }
@@ -34,7 +33,6 @@ enum UserMsg {
 }
 #[derive(Clone, PartialEq, Properties)]
 struct UserProps {
-    name: AttrValue,
     app_hook: Callback<AttrValue>,
 }
 
@@ -72,7 +70,7 @@ impl Component for UserNamePrompt {
                     .and_then(|t| t.dyn_into::<HtmlInputElement>().ok())
                     .unwrap()
                     .value();
-                console::log_1(&JsValue::from(input.clone()));
+                log!("{}", input);
                 link.send_message(UserMsg::UpdateInput(input));
             })
         };
@@ -108,6 +106,39 @@ impl Component for UserNamePrompt {
     }
 }
 
+#[derive(PartialEq, Properties)]
+struct VictoryProps {
+    winner: String,
+}
+
+struct VictoryScreen;
+
+impl Component for VictoryScreen {
+    type Message = ();
+    type Properties = VictoryProps;
+
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let props = ctx.props();
+        let navigator = ctx.link().navigator().unwrap();
+        let return_button: Callback<MouseEvent> = {
+            Callback::from(move |_| {
+                wasm_bindgen_futures::spawn_local(async move {
+                    Request::post("/api/universe/kill").send().await.unwrap();
+                });
+                navigator.push(&Route::Home);
+            })
+        };
+        html!(<>
+                <p>{"the winner is: "}{props.winner.clone()}</p>
+                <button onclick={return_button}>{"Back"}</button>
+            </>)
+    }
+}
+
 #[derive(Clone, PartialEq, Properties)]
 struct LobbyProperties {
     player_name: String,
@@ -115,6 +146,7 @@ struct LobbyProperties {
 
 enum LobbyMsg {
     UpdateUsers(UserList),
+    Color(String),
 }
 
 struct ActiveUsers {
@@ -131,9 +163,15 @@ impl Component for ActiveUsers {
         }
     }
 
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             LobbyMsg::UpdateUsers(val) => self.json_data = val,
+            LobbyMsg::Color(val) => {
+                let navigator = ctx.link().navigator().unwrap();
+                if val != "none" {
+                    navigator.push(&Route::InGame);
+                }
+            }
         }
         true
     }
@@ -154,9 +192,23 @@ impl Component for ActiveUsers {
         });
         let n_users = self.json_data.n_users;
         let user_list = self.json_data.users.clone();
-        let navigator = ctx.link().navigator().unwrap();
-        let start_game: Callback<MouseEvent> =
-            { Callback::from(move |_| navigator.push(&Route::InGame)) };
+        let start_game: Callback<MouseEvent> = {
+            let link = ctx.link().clone();
+            Callback::from(move |_| {
+                let link = link.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let url = "/api/user/color";
+                    let response: ColorSender = Request::get(url)
+                        .send()
+                        .await
+                        .unwrap()
+                        .json()
+                        .await
+                        .unwrap();
+                    link.send_message(LobbyMsg::Color(response.value))
+                });
+            })
+        };
         html!(
         <>
             <p>{"Number of users "}{n_users}</p>
@@ -167,19 +219,6 @@ impl Component for ActiveUsers {
             <button onclick={start_game}>{"start!!!"}</button>
         </>
         )
-    }
-
-    fn destroy(&mut self, ctx: &Context<Self>) {
-        let url = "/api/usernames/delete";
-        let props = ctx.props().clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            Request::post(url)
-                .header("Content-Type", "application/json")
-                .body(serde_json::to_string(&props.player_name.clone()).unwrap())
-                .send()
-                .await
-                .unwrap();
-        })
     }
 }
 
@@ -194,9 +233,14 @@ pub enum InGameMsg {
     CanvasClick(MouseEvent),
 }
 
+#[derive(Clone, PartialEq, Properties)]
+pub struct InGameProps {
+    app_hook: Callback<AttrValue>,
+}
+
 impl Component for InGame {
     type Message = InGameMsg;
-    type Properties = ();
+    type Properties = InGameProps;
 
     fn create(ctx: &Context<Self>) -> Self {
         let canvas = NodeRef::default();
@@ -206,7 +250,6 @@ impl Component for InGame {
             universe: Universe::new_empty(),
         }
     }
-
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             InGameMsg::Init => {
@@ -215,13 +258,26 @@ impl Component for InGame {
             }
             InGameMsg::Render(uni) => {
                 self.universe = uni;
+                if self.universe.is_finished() {
+                    let navigator = ctx.link().navigator().unwrap();
+                    let cell_numbers = self.universe.get_cell_numbers();
+                    let winner = if cell_numbers.1 > cell_numbers.2 {
+                        "Red"
+                    } else if cell_numbers.2 > cell_numbers.1 {
+                        "Blue"
+                    } else {
+                        "None"
+                    };
+                    ctx.props().app_hook.emit(winner.into());
+                    navigator.push(&Route::VictoryScreen);
+                }
                 self.render_universe();
                 true
             }
             InGameMsg::CanvasClick(eve) => {
                 let x = eve.offset_x() as u32;
                 let y = eve.offset_y() as u32;
-                log!("clicko geilo {x}, {y}");
+                log!("clicked at: {x}, {y}");
 
                 let x_uni = x * WIDTH_UNIVERSE / WIDTH_CANVAS;
                 let y_uni = y * HEIGHT_UNIVERSE / HEIGHT_CANVAS;
@@ -255,6 +311,7 @@ impl Component for InGame {
             link.send_message(InGameMsg::Render(response));
         });
         let timer = self.universe.get_timer();
+        let cell_numbers = self.universe.get_cell_numbers();
         html! {<>
             <canvas id="drawing"
                 width = {format!("{WIDTH_CANVAS}")}
@@ -262,6 +319,10 @@ impl Component for InGame {
                 ref={self.canvas.clone()}
             onclick={ctx.link().callback(|event: web_sys::MouseEvent| InGameMsg::CanvasClick(event))}/>
                 <p>{"Timer: "}{format!("{:.2}", timer)}</p>
+                <p>{"Empty Cells: "}{cell_numbers.0}</p>
+                <p>{"Red Cells: "}{cell_numbers.1}</p>
+                <p>{"Blue Cells: "}{cell_numbers.2}</p>
+                <p>{"Neutral Cells: "}{cell_numbers.3}</p>
                 </>
         }
     }
@@ -293,7 +354,6 @@ impl InGame {
             .unwrap();
 
         let cells = self.universe.get_cells();
-        log!("hier bin ich !");
         cctx.begin_path();
 
         cctx.set_fill_style(&JsValue::from(EMPTY_COLOR));
@@ -418,10 +478,13 @@ enum Route {
     ActiveUsers,
     #[at("/game")]
     InGame,
+    #[at("/victory")]
+    VictoryScreen,
 }
 
 pub enum AppMsg {
     UserName(AttrValue),
+    InGame(AttrValue),
 }
 
 pub struct App {
@@ -442,21 +505,29 @@ impl Component for App {
             AppMsg::UserName(val) => {
                 self.app_state.user_name = val.as_str().into();
             }
+            AppMsg::InGame(val) => {
+                self.app_state.winner = val.as_str().into();
+            }
         }
         true
     }
     fn view(&self, ctx: &Context<Self>) -> Html {
         let app_hook = ctx.link().callback(AppMsg::UserName);
+        let app_hook_game = ctx.link().callback(AppMsg::InGame);
         let player_name = self.app_state.user_name.clone();
+        let winner_name = self.app_state.winner.clone();
         let switch = move |routes: Route| -> Html {
             match routes {
                 Route::Home => {
-                    html! { <UserNamePrompt name="Peter" app_hook={app_hook.clone()} /> }
+                    html! { <UserNamePrompt app_hook={app_hook.clone()} /> }
                 }
                 Route::ActiveUsers => html! {
                     <ActiveUsers player_name={player_name.clone()} />
                 },
-                Route::InGame => html! { <InGame/>},
+                Route::InGame => html! { <InGame app_hook={app_hook_game.clone()}/>},
+                Route::VictoryScreen => {
+                    html! { <VictoryScreen winner={winner_name.clone()}/> }
+                }
             }
         };
         html!(

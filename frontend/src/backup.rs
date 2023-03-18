@@ -14,6 +14,10 @@ impl Image {
     }
 }
 
+struct ImageButtonState {
+    value: bool,
+}
+
 fn send_to_back() -> Request {
     let url = "/api/files/back/";
     let request = Request::post(url)
