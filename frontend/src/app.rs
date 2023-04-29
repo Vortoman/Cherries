@@ -1,3 +1,4 @@
+use common::constants::*;
 use common::*;
 use reqwasm::http::Request;
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,7 @@ use web_sys::{
     console, CanvasRenderingContext2d, EventTarget, HtmlCanvasElement, HtmlInputElement,
 };
 use yew::prelude::*;
-use yew_router::prelude::*;
+use yew_router::{navigator, prelude::*};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -18,12 +19,16 @@ macro_rules! log {
 
 struct AppState {
     user_name: String,
+    winner: String,
+    color: String,
 }
 
 impl AppState {
     fn new() -> Self {
         AppState {
             user_name: "".into(),
+            winner: "".into(),
+            color: "none".into(),
         }
     }
 }
@@ -32,6 +37,7 @@ enum UserMsg {
     UpdateInput(String),
     ButtonPressed(String),
 }
+
 #[derive(Clone, PartialEq, Properties)]
 struct UserProps {
     name: AttrValue,
@@ -111,6 +117,7 @@ impl Component for UserNamePrompt {
 #[derive(Clone, PartialEq, Properties)]
 struct LobbyProperties {
     player_name: String,
+    app_hook: Callback<AttrValue>,
 }
 
 enum LobbyMsg {
@@ -125,7 +132,7 @@ impl Component for ActiveUsers {
     type Message = LobbyMsg;
     type Properties = LobbyProperties;
 
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self {
             json_data: UserList::new(),
         }
@@ -134,6 +141,13 @@ impl Component for ActiveUsers {
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             LobbyMsg::UpdateUsers(val) => self.json_data = val,
+            LobbyMsg::Color(val) => {
+                let navigator = ctx.link().navigator().unwrap();
+                if val != "none" {
+                    ctx.props().app_hook.emit(val.clone().into());
+                    navigator.push(&Route::PreGame);
+                }
+            }
         }
         true
     }
@@ -180,6 +194,56 @@ impl Component for ActiveUsers {
                 .await
                 .unwrap();
         })
+    }
+}
+
+#[derive(Clone, PartialEq, Properties)]
+pub struct PreGameProps {
+    color: String,
+}
+
+pub enum PreGameMsg {
+    CheckReady(bool),
+}
+
+pub struct PreGame;
+
+impl Component for PreGame {
+    type Message = PreGameMsg;
+    type Properties = PreGameProps;
+
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self
+    }
+
+    fn update(&mut self, _ctx: &Context<Self>, _msg: Self::Message) -> bool {
+        true
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let color_string = ctx.props().color.clone();
+        let navigator = ctx.link().navigator().unwrap();
+        wasm_bindgen_futures::spawn_local(async move {
+            let url = "/api/user/pregame";
+            log!("sth");
+            let response: PreGameData = Request::get(url)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            if response.ready {
+                navigator.push(&Route::InGame)
+            }
+        });
+
+        html!(
+        <>
+            <p>{"Your color is "}{color_string}</p>
+            <p>{"waiting for second player"}</p>
+        </>
+        )
     }
 }
 
@@ -255,14 +319,20 @@ impl Component for InGame {
             link.send_message(InGameMsg::Render(response));
         });
         let timer = self.universe.get_timer();
-        html! {<>
-            <canvas id="drawing"
-                width = {format!("{WIDTH_CANVAS}")}
-            height = {format!("{HEIGHT_CANVAS}")}
-                ref={self.canvas.clone()}
-            onclick={ctx.link().callback(|event: web_sys::MouseEvent| InGameMsg::CanvasClick(event))}/>
-                <p>{"Timer: "}{format!("{:.2}", timer)}</p>
-                </>
+        let cell_numbers = self.universe.get_cell_numbers();
+        html! {
+            <>
+                <canvas id="drawing"
+                    width = {format!("{WIDTH_CANVAS}")}
+                    height = {format!("{HEIGHT_CANVAS}")}
+                    ref={self.canvas.clone()}
+                onclick={ctx.link().callback(|event: web_sys::MouseEvent| InGameMsg::CanvasClick(event))}/>
+                {"Timer: "}{format!("{:.2}", timer)}<br/>
+                {"Empty Cells: "}{cell_numbers.0}<br/>
+                {"Red Cells: "}{cell_numbers.1}<br/>
+                {"Blue Cells: "}{cell_numbers.2}<br/>
+                {"Neutral Cells: "}{cell_numbers.3}<br/>
+            </>
         }
     }
 }
@@ -283,6 +353,7 @@ impl InGame {
         // let _ = cctx.fill_text("hello", 200.0, 200.0);
         self.draw_grid();
     }
+
     fn render_universe(&self) {
         let canvas: HtmlCanvasElement = self.canvas.cast().unwrap();
         let cctx: CanvasRenderingContext2d = canvas
@@ -295,87 +366,35 @@ impl InGame {
         let cells = self.universe.get_cells();
         log!("hier bin ich !");
         cctx.begin_path();
-
-        cctx.set_fill_style(&JsValue::from(EMPTY_COLOR));
-        for row in 0..WIDTH_UNIVERSE {
-            for col in 0..HEIGHT_UNIVERSE {
-                if cells[self
-                    .universe
-                    .get_index((row as usize, col as usize))
-                    .unwrap()]
-                    != Cell::Empty
-                {
-                    continue;
-                }
-                cctx.fill_rect(
-                    (col * (CELL_SIZE + 1) + 1) as f64,
-                    (row * (CELL_SIZE + 1) + 1) as f64,
-                    CELL_SIZE as f64,
-                    CELL_SIZE as f64,
-                );
-            }
-        }
-
-        cctx.set_fill_style(&JsValue::from(RED_COLOR));
-        for row in 0..WIDTH_UNIVERSE {
-            for col in 0..HEIGHT_UNIVERSE {
-                if cells[self
-                    .universe
-                    .get_index((row as usize, col as usize))
-                    .unwrap()]
-                    != Cell::Red
-                {
-                    continue;
-                }
-                cctx.fill_rect(
-                    (col * (CELL_SIZE + 1) + 1) as f64,
-                    (row * (CELL_SIZE + 1) + 1) as f64,
-                    CELL_SIZE as f64,
-                    CELL_SIZE as f64,
-                );
-            }
-        }
-
-        cctx.set_fill_style(&JsValue::from(BLUE_COLOR));
-        for row in 0..WIDTH_UNIVERSE {
-            for col in 0..HEIGHT_UNIVERSE {
-                if cells[self
-                    .universe
-                    .get_index((row as usize, col as usize))
-                    .unwrap()]
-                    != Cell::Blue
-                {
-                    continue;
-                }
-                cctx.fill_rect(
-                    (col * (CELL_SIZE + 1) + 1) as f64,
-                    (row * (CELL_SIZE + 1) + 1) as f64,
-                    CELL_SIZE as f64,
-                    CELL_SIZE as f64,
-                );
-            }
-        }
-
-        cctx.set_fill_style(&JsValue::from(WALL_COLOR));
-        for row in 0..WIDTH_UNIVERSE {
-            for col in 0..HEIGHT_UNIVERSE {
-                if cells[self
-                    .universe
-                    .get_index((row as usize, col as usize))
-                    .unwrap()]
-                    != Cell::Neutral
-                {
-                    continue;
-                }
-                cctx.fill_rect(
-                    (col * (CELL_SIZE + 1) + 1) as f64,
-                    (row * (CELL_SIZE + 1) + 1) as f64,
-                    CELL_SIZE as f64,
-                    CELL_SIZE as f64,
-                );
-            }
+        let fill_styles = [EMPTY_COLOR, RED_COLOR, BLUE_COLOR, WALL_COLOR];
+        let cell_types = [Cell::Empty, Cell::Red, Cell::Blue, Cell::Neutral];
+        for (&color, ctype) in fill_styles.iter().zip(cell_types) {
+            // going through all cells for each color to avoid calling set_fill_style() a lot, as it is rather expensive
+            cctx.set_fill_style(&JsValue::from(color));
+            self.fill_rects(&cells, &cctx, ctype);
         }
         cctx.stroke();
+    }
+
+    fn fill_rects(&self, cells: &Vec<Cell>, cctx: &CanvasRenderingContext2d, cell_type: Cell) {
+        for row in 0..WIDTH_UNIVERSE {
+            for col in 0..HEIGHT_UNIVERSE {
+                if cells[self
+                    .universe
+                    .get_index((row as usize, col as usize))
+                    .unwrap()]
+                    != cell_type
+                {
+                    continue;
+                }
+                cctx.fill_rect(
+                    (col * (CELL_SIZE + 1) + 1) as f64,
+                    (row * (CELL_SIZE + 1) + 1) as f64,
+                    CELL_SIZE as f64,
+                    CELL_SIZE as f64,
+                );
+            }
+        }
     }
 
     fn draw_grid(&self) {
@@ -416,12 +435,16 @@ enum Route {
     Home,
     #[at("/lobby")]
     ActiveUsers,
+    #[at("/pregame")]
+    PreGame,
     #[at("/game")]
     InGame,
 }
 
 pub enum AppMsg {
     UserName(AttrValue),
+    InGame(AttrValue),
+    ActiveUsers(AttrValue),
 }
 
 pub struct App {
@@ -437,26 +460,38 @@ impl Component for App {
             app_state: AppState::new(),
         }
     }
+
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             AppMsg::UserName(val) => {
                 self.app_state.user_name = val.as_str().into();
             }
+            AppMsg::ActiveUsers(val) => {
+                self.app_state.color = val.as_str().into();
+            }
+            AppMsg::InGame(val) => {
+                self.app_state.winner = val.as_str().into();
+            }
         }
         true
     }
+
     fn view(&self, ctx: &Context<Self>) -> Html {
         let app_hook = ctx.link().callback(AppMsg::UserName);
+        let app_hook_game = ctx.link().callback(AppMsg::InGame);
+        let app_hook_au = ctx.link().callback(AppMsg::ActiveUsers);
         let player_name = self.app_state.user_name.clone();
+        let winner_name = self.app_state.winner.clone();
+        let player_color = self.app_state.color.clone();
         let switch = move |routes: Route| -> Html {
             match routes {
-                Route::Home => {
-                    html! { <UserNamePrompt name="Peter" app_hook={app_hook.clone()} /> }
-                }
+                Route::Home => html! { <UserNamePrompt app_hook={app_hook.clone()} /> },
                 Route::ActiveUsers => html! {
-                    <ActiveUsers player_name={player_name.clone()} />
+                    <ActiveUsers player_name={player_name.clone()} app_hook = {app_hook_au.clone()} />
                 },
-                Route::InGame => html! { <InGame/>},
+                Route::PreGame => html! { <PreGame color={player_color.clone()} />},
+                Route::InGame => html! { <InGame app_hook={app_hook_game.clone()}/>},
+                Route::VictoryScreen => html! { <VictoryScreen winner={winner_name.clone()}/> },
             }
         };
         html!(
