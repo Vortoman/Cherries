@@ -10,18 +10,15 @@ categories = ["gui", "wasm", "web-programming"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-yew = { version="0.20", features=["csr"] }
-reqwasm = "0.2"
-serde = "1.0.152"
+yew = { version = "0.20", features = ["csr"] }
+reqwasm = "0.5.0"
+serde = "1.0.160"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen = "*"
 serde_json = "*"
-common = {path = "../common"}
+common = { path = "../common" }
 yew-router = "0.17.0"
 
 [dependencies.web-sys]
-version =  "0.3.61"
-features = [
-  "CanvasRenderingContext2d",
-  "HtmlCanvasElement"
-]
+version = "0.3.61"
+features = ["CanvasRenderingContext2d", "HtmlCanvasElement"]

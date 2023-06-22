@@ -242,6 +242,10 @@ impl Universe {
     pub fn set_timer(&mut self, t: f64) {
         self.timer = t;
     }
+
+    pub fn get_cell_numbers(&self) -> (u32, u32, u32, u32) {
+        (self.n_empty, self.n_red, self.n_blue, self.n_neutral)
+    }
 }
 
 #[derive(Serialize, Deserialize)]

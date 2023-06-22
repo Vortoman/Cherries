@@ -227,6 +227,11 @@ pub struct InGame {
     universe: Universe,
 }
 
+#[derive(Clone, PartialEq, Properties)]
+pub struct InGameProps {
+    app_hook: Callback<AttrValue>,
+}
+
 pub enum InGameMsg {
     Init,
     Render(Universe),
@@ -467,6 +472,27 @@ impl InGame {
             );
         }
         cctx.stroke();
+    }
+}
+
+#[derive(Clone, PartialEq, Properties)]
+struct VictoryScreenProps {
+    winner: String,
+}
+
+struct VictoryScreen {}
+
+impl Component for VictoryScreen {
+    type Message = ();
+
+    type Properties = VictoryScreenProps;
+
+    fn create(ctx: &Context<Self>) -> Self {
+        Self {}
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        html!("<></>")
     }
 }
 
