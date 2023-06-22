@@ -1,2 +1,5 @@
 /dist/
 /target/
+Dockerfile
+Cargo.lock
+
