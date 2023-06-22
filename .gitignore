@@ -1,7 +1,5 @@
 /dist/
 /target/
-/frontend/dist/
-/backend/dist/
-/Cargo.lock
-/Dockerfile
+Dockerfile
+Cargo.lock
 

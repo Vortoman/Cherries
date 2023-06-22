@@ -7,7 +7,10 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.3.0"
+actix-session = {version = "0.7.2", features = ["cookie-session"]}
+actix-web-lab = {version = "0.19.1", features= ["spa"]}
 derive_more = "0.99.17"
 serde = { version = "1.0.152", features = ["derive"] }
 common = {path = "../common"}
 serde_json = "*"
+rand = "0.8.5"

@@ -1,21 +1,23 @@
-pub mod constants;
-use crate::constants::*;
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::JsValue;
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Color {
+    Red,
+    Blue,
+    None,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct User {
     pub name: String,
-    pub turn: bool,
-    pub countdown: f64,
+    pub color: Color,
 }
 
 impl User {
     pub fn new(name: String) -> User {
         User {
             name,
-            turn: true,
-            countdown: 0.,
+            color: Color::None,
         }
     }
 }
@@ -23,11 +25,6 @@ impl User {
 #[derive(Serialize, Deserialize)]
 pub struct ColorSender {
     pub value: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct PreGameData {
-    pub ready: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -45,6 +42,9 @@ impl UserList {
     }
 }
 
+#[derive(Debug)]
+pub struct CellReadError;
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Cell {
     Empty,
@@ -53,11 +53,36 @@ pub enum Cell {
     Blue,
 }
 
+impl Cell {
+    pub fn to_color(&self) -> Color {
+        match self {
+            Cell::Empty => Color::None,
+            Cell::Neutral => Color::None,
+            Cell::Red => Color::Red,
+            Cell::Blue => Color::Blue,
+        }
+    }
+}
+
 impl Default for Cell {
     fn default() -> Self {
         Self::Empty
     }
 }
+
+pub const CELL_SIZE: u32 = 15;
+pub const GRID_COLOR: &str = "#CCCC";
+pub const EMPTY_COLOR: &str = "#FFFFFF";
+pub const WALL_COLOR: &str = "#000000";
+pub const BLUE_COLOR: &str = "#0000FF";
+pub const RED_COLOR: &str = "#FF0000";
+
+pub const WIDTH_UNIVERSE: u32 = 32;
+pub const HEIGHT_UNIVERSE: u32 = 32;
+pub const N_NEUTRAL_BLOCKS: u32 = 100;
+
+pub const WIDTH_CANVAS: u32 = (CELL_SIZE + 1) * WIDTH_UNIVERSE + 1;
+pub const HEIGHT_CANVAS: u32 = (CELL_SIZE + 1) * HEIGHT_UNIVERSE + 1;
 
 pub type Coords = (usize, usize);
 
@@ -73,6 +98,9 @@ pub struct Universe {
     n_blue: u32,
     finished: bool,
     timer: f64,
+
+    pub red_player_connected: bool,
+    pub blue_player_connected: bool,
 }
 
 enum CellWrapper<'a> {
@@ -81,36 +109,41 @@ enum CellWrapper<'a> {
 }
 
 impl Universe {
+    pub fn _new_rand(cells: Vec<Cell>, n_empty: u32, n_neutral: u32) -> Self {
+        Universe {
+            cells,
+            active_cells: vec![],
+            width: WIDTH_UNIVERSE as usize,
+            height: HEIGHT_UNIVERSE as usize,
+            n_empty,
+            n_neutral,
+            n_red: 0,
+            n_blue: 0,
+            finished: false,
+            timer: 3.,
+            red_player_connected: false,
+            blue_player_connected: false,
+        }
+    }
+
     pub fn new_empty() -> Universe {
         Universe {
             cells: Vec::from([Cell::Empty; (WIDTH_UNIVERSE * HEIGHT_UNIVERSE) as usize]),
             active_cells: vec![],
             width: WIDTH_UNIVERSE as usize,
             height: HEIGHT_UNIVERSE as usize,
-            n_empty: (WIDTH_UNIVERSE * HEIGHT_UNIVERSE) as u32,
+            n_empty: (WIDTH_UNIVERSE * HEIGHT_UNIVERSE),
             n_neutral: 0,
             n_red: 0,
             n_blue: 0,
             finished: false,
             timer: 3.,
+            red_player_connected: false,
+            blue_player_connected: false,
         }
     }
 
-    pub fn new_rand() -> Universe {
-        let mut uni = Self::new_empty();
-        for i in 0..N_NEUTRAL_BLOCKS {
-            // let idx = rand::random::<usize>() % uni.cells.len();
-            let idx = ((((i as usize + 153) * 4) + 44) * 22) % uni.cells.len();
-            if uni.cells[idx] == Cell::Empty {
-                uni.cells[idx] = Cell::Neutral;
-                uni.n_empty -= 1;
-                uni.n_neutral += 1;
-            }
-        }
-        uni
-    }
-
-    pub fn set_cell(&mut self, cell: &Cell, coords: Coords) -> Result<bool, ()> {
+    pub fn set_cell(&mut self, cell: &Cell, coords: Coords) -> Result<bool, CellReadError> {
         self._set_cell(CellWrapper::SelfManip, cell, coords)
     }
 
@@ -157,7 +190,7 @@ impl Universe {
             .map(|d| (coords.0 + d.0, coords.1 + d.1))
             .into_iter()
             .filter(|v| {
-                v.0 > 0 && v.1 > 0 && v.0 < WIDTH_UNIVERSE as i32 && v.1 < HEIGHT_UNIVERSE as i32
+                v.0 >= 0 && v.1 >= 0 && v.0 < WIDTH_UNIVERSE as i32 && v.1 < HEIGHT_UNIVERSE as i32
             })
             .map(|v| self.get_index((v.0 as usize, v.1 as usize)).unwrap())
             .collect()
@@ -168,8 +201,8 @@ impl Universe {
         wrapped_vec: CellWrapper,
         cell: &Cell,
         coords: Coords,
-    ) -> Result<bool, ()> {
-        let idx = self.get_index(coords)?;
+    ) -> Result<bool, CellReadError> {
+        let idx = self.get_index(coords).map_err(|_| CellReadError)?;
         let cell_vec = match wrapped_vec {
             CellWrapper::SelfManip => &mut self.active_cells,
             CellWrapper::Extern(v) => v,
@@ -191,11 +224,15 @@ impl Universe {
                     Ok(false)
                 }
             }
-            _ => Err(()),
+            _ => Err(CellReadError),
         }
     }
     pub fn get_cells(&self) -> Vec<Cell> {
         self.cells.clone()
+    }
+
+    pub fn get_cell_numbers(&self) -> (u32, u32, u32, u32) {
+        (self.n_empty, self.n_red, self.n_blue, self.n_neutral)
     }
 
     pub fn get_timer(&self) -> f64 {

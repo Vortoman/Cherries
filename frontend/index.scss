@@ -9,7 +9,7 @@ body {
   display: flex;
   justify-content: center;
 
-  background: linear-gradient(to bottom right, #444444, #009a5b);
+  background: linear-gradient(to bottom right, #444444, #004a9b);
   font-size: 1.5rem;
 }
 
@@ -19,15 +19,15 @@ main {
   text-align: center;
 }
 
-.logo {
-  height: 20em;
-}
-
-.heart:after {
-  content: "❤️";
-
-  font-size: 1.75em;
-}
+// .logo {
+//   height: 20em;
+// }
+//
+// .heart:after {
+//   content: "❤️";
+//
+//   font-size: 1.75em;
+// }
 
 h1 + .subtitle {
   display: block;
