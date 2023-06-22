@@ -1,5 +1,6 @@
 /dist/
 /target/
-Dockerfile
-Cargo.lock
+./Dockerfile
+./Cargo.lock
+./wiki_tui.log
 
