@@ -1,7 +1,6 @@
 use actix_session::{storage::CookieSessionStore, Session, SessionMiddleware};
 use actix_web::cookie::Key;
 use actix_web::error::JsonPayloadError;
-// use actix_web::middleware::Logger;
 use actix_web::web::{Data, Json};
 use actix_web::{get, post, web, App, HttpResponse, HttpServer};
 use actix_web_lab::web::spa;
@@ -63,12 +62,6 @@ impl ActiveUser {
         }
     }
 }
-
-// async fn get_user_data(session: Session, app_state: Data<AppState>) -> Result<String, Error> {
-//     let name = session.get::<String>(USER_NAME)?;
-//
-//     Ok(name.unwrap())
-// }
 
 #[derive(Serialize, Deserialize)]
 struct BackendJson {
@@ -290,7 +283,7 @@ async fn main() -> std::io::Result<()> {
                     .finish(),
             )
     })
-    .bind(("0.0.0.0", 8080))?
+    .bind(("127.0.0.1", 8080))?
     .run()
     .await
 }

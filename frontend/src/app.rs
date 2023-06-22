@@ -13,20 +13,6 @@ macro_rules! log {
     }
 }
 
-struct AppState {
-    user_name: String,
-    winner: String,
-}
-
-impl AppState {
-    fn new() -> Self {
-        AppState {
-            user_name: "".into(),
-            winner: "".into(),
-        }
-    }
-}
-
 enum UserMsg {
     UpdateInput(String),
     ButtonPressed(String),
@@ -238,11 +224,6 @@ pub enum InGameMsg {
     CanvasClick(MouseEvent),
 }
 
-#[derive(Clone, PartialEq, Properties)]
-pub struct InGameProps {
-    app_hook: Callback<AttrValue>,
-}
-
 impl Component for InGame {
     type Message = InGameMsg;
     type Properties = InGameProps;
@@ -359,87 +340,34 @@ impl InGame {
             .unwrap();
 
         let cells = self.universe.get_cells();
+
+        let fill_rectangles = |cell_style: Cell, cell_color: &str| {
+            cctx.set_fill_style(&JsValue::from(cell_color));
+            for row in 0..WIDTH_UNIVERSE {
+                for col in 0..HEIGHT_UNIVERSE {
+                    if cells[self
+                        .universe
+                        .get_index((row as usize, col as usize))
+                        .unwrap()]
+                        != cell_style
+                    {
+                        continue;
+                    }
+                    cctx.fill_rect(
+                        (col * (CELL_SIZE + 1) + 1) as f64,
+                        (row * (CELL_SIZE + 1) + 1) as f64,
+                        CELL_SIZE as f64,
+                        CELL_SIZE as f64,
+                    );
+                }
+            }
+        };
+
         cctx.begin_path();
-
-        cctx.set_fill_style(&JsValue::from(EMPTY_COLOR));
-        for row in 0..WIDTH_UNIVERSE {
-            for col in 0..HEIGHT_UNIVERSE {
-                if cells[self
-                    .universe
-                    .get_index((row as usize, col as usize))
-                    .unwrap()]
-                    != Cell::Empty
-                {
-                    continue;
-                }
-                cctx.fill_rect(
-                    (col * (CELL_SIZE + 1) + 1) as f64,
-                    (row * (CELL_SIZE + 1) + 1) as f64,
-                    CELL_SIZE as f64,
-                    CELL_SIZE as f64,
-                );
-            }
-        }
-
-        cctx.set_fill_style(&JsValue::from(RED_COLOR));
-        for row in 0..WIDTH_UNIVERSE {
-            for col in 0..HEIGHT_UNIVERSE {
-                if cells[self
-                    .universe
-                    .get_index((row as usize, col as usize))
-                    .unwrap()]
-                    != Cell::Red
-                {
-                    continue;
-                }
-                cctx.fill_rect(
-                    (col * (CELL_SIZE + 1) + 1) as f64,
-                    (row * (CELL_SIZE + 1) + 1) as f64,
-                    CELL_SIZE as f64,
-                    CELL_SIZE as f64,
-                );
-            }
-        }
-
-        cctx.set_fill_style(&JsValue::from(BLUE_COLOR));
-        for row in 0..WIDTH_UNIVERSE {
-            for col in 0..HEIGHT_UNIVERSE {
-                if cells[self
-                    .universe
-                    .get_index((row as usize, col as usize))
-                    .unwrap()]
-                    != Cell::Blue
-                {
-                    continue;
-                }
-                cctx.fill_rect(
-                    (col * (CELL_SIZE + 1) + 1) as f64,
-                    (row * (CELL_SIZE + 1) + 1) as f64,
-                    CELL_SIZE as f64,
-                    CELL_SIZE as f64,
-                );
-            }
-        }
-
-        cctx.set_fill_style(&JsValue::from(WALL_COLOR));
-        for row in 0..WIDTH_UNIVERSE {
-            for col in 0..HEIGHT_UNIVERSE {
-                if cells[self
-                    .universe
-                    .get_index((row as usize, col as usize))
-                    .unwrap()]
-                    != Cell::Neutral
-                {
-                    continue;
-                }
-                cctx.fill_rect(
-                    (col * (CELL_SIZE + 1) + 1) as f64,
-                    (row * (CELL_SIZE + 1) + 1) as f64,
-                    CELL_SIZE as f64,
-                    CELL_SIZE as f64,
-                );
-            }
-        }
+        fill_rectangles(Cell::Empty, EMPTY_COLOR);
+        fill_rectangles(Cell::Red, RED_COLOR);
+        fill_rectangles(Cell::Blue, BLUE_COLOR);
+        fill_rectangles(Cell::Neutral, WALL_COLOR);
         cctx.stroke();
     }
 
@@ -480,22 +408,6 @@ struct VictoryScreenProps {
     winner: String,
 }
 
-struct VictoryScreen {}
-
-impl Component for VictoryScreen {
-    type Message = ();
-
-    type Properties = VictoryScreenProps;
-
-    fn create(ctx: &Context<Self>) -> Self {
-        Self {}
-    }
-
-    fn view(&self, ctx: &Context<Self>) -> Html {
-        html!("<></>")
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Routable)]
 enum Route {
     #[at("/")]
@@ -511,6 +423,20 @@ enum Route {
 pub enum AppMsg {
     UserName(AttrValue),
     InGame(AttrValue),
+}
+
+struct AppState {
+    user_name: String,
+    winner: String,
+}
+
+impl AppState {
+    fn new() -> Self {
+        AppState {
+            user_name: "".into(),
+            winner: "".into(),
+        }
+    }
 }
 
 pub struct App {
